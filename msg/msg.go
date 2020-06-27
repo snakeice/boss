@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-//provenied by glide https://github.com/Masterminds/glide
-
 import (
 	"bufio"
 	"fmt"
@@ -20,7 +18,7 @@ type Messenger struct {
 	Stderr     io.Writer
 	Stdin      io.Reader
 	PanicOnDie bool
-	ecode      int
+	eCode      int
 	hasErrored bool
 }
 
@@ -30,36 +28,53 @@ func NewMessenger() *Messenger {
 		Stderr:     os.Stderr,
 		Stdin:      os.Stdin,
 		PanicOnDie: false,
-		ecode:      1,
+		eCode:      1,
 	}
 
 	return m
 }
 
+var DebugEnable bool
 var Default = NewMessenger()
 
-func (m *Messenger) Info(msg string, args ...interface{}) {
-	m.Msg("[INFO]\t"+msg, args...)
+func Die(msg string, args ...interface{}) {
+	Default.Die(msg, args...)
+}
+
+func Msg(msg string, args ...interface{}) {
+	Default.Msg(msg, args...)
+}
+
+func Puts(msg string, args ...interface{}) {
+	Default.Puts(msg, args...)
+}
+
+func Print(msg string) {
+	Default.Print(msg)
+}
+
+func PromptUntil(opts []string) (string, error) {
+	return Default.PromptUntil(opts)
+}
+
+func PromptUntilYorN() bool {
+	return Default.PromptUntilYorN()
 }
 
 func Info(msg string, args ...interface{}) {
 	Default.Info(msg, args...)
 }
 
-func (m *Messenger) Debug(msg string, args ...interface{}) {
-	m.Msg("[DEBUG]\t"+msg, args...)
-}
-
 func Debug(msg string, args ...interface{}) {
 	Default.Debug(msg, args...)
 }
 
-func (m *Messenger) Warn(msg string, args ...interface{}) {
-	m.Msg("[WARN]\t"+msg, args...)
-}
-
 func Warn(msg string, args ...interface{}) {
 	Default.Warn(msg, args...)
+}
+
+func Err(msg string, args ...interface{}) {
+	Default.Err(msg, args...)
 }
 
 func (m *Messenger) Err(msg string, args ...interface{}) {
@@ -67,8 +82,19 @@ func (m *Messenger) Err(msg string, args ...interface{}) {
 	m.hasErrored = true
 }
 
-func Err(msg string, args ...interface{}) {
-	Default.Err(msg, args...)
+func (m *Messenger) Warn(msg string, args ...interface{}) {
+	m.Msg("[WARN ]\t"+msg, args...)
+}
+
+func (m *Messenger) Info(msg string, args ...interface{}) {
+	m.Msg("[INFO ]\t"+msg, args...)
+}
+
+func (m *Messenger) Debug(msg string, args ...interface{}) {
+	if !DebugEnable {
+		return
+	}
+	m.Msg("[DEBUG]\t"+msg, args...)
 }
 
 func (m *Messenger) Die(msg string, args ...interface{}) {
@@ -76,17 +102,13 @@ func (m *Messenger) Die(msg string, args ...interface{}) {
 	if m.PanicOnDie {
 		panic("trapped a Die() call")
 	}
-	os.Exit(m.ecode)
-}
-
-func Die(msg string, args ...interface{}) {
-	Default.Die(msg, args...)
+	os.Exit(m.eCode)
 }
 
 func (m *Messenger) ExitCode(e int) int {
 	m.Lock()
-	old := m.ecode
-	m.ecode = e
+	old := m.eCode
+	m.eCode = e
 	m.Unlock()
 	return old
 }
@@ -103,37 +125,29 @@ func (m *Messenger) Msg(msg string, args ...interface{}) {
 	}
 
 	if len(args) == 0 {
-		fmt.Fprint(m.Stderr, msg)
+		if _, err := fmt.Fprint(m.Stderr, msg); err != nil {
+			println("[Fault] %s", err.Error())
+		}
 	} else {
-		fmt.Fprintf(m.Stderr, msg, args...)
+		if _, err := fmt.Fprintf(m.Stderr, msg, args...); err != nil {
+			println("[Fault] %s", err.Error())
+		}
 	}
-}
-
-func Msg(msg string, args ...interface{}) {
-	Default.Msg(msg, args...)
 }
 
 func (m *Messenger) Puts(msg string, args ...interface{}) {
 	m.Lock()
 	defer m.Unlock()
-
-	fmt.Fprintf(m.Stdout, msg, args...)
-	fmt.Fprintln(m.Stdout)
-}
-
-func Puts(msg string, args ...interface{}) {
-	Default.Puts(msg, args...)
+	if _, err := fmt.Fprintf(m.Stderr, msg, args...); err != nil {
+		println("[Fault] %s", err.Error())
+	}
+	if _, err := fmt.Fprintln(m.Stderr); err != nil {
+		println("[Fault] %s", err.Error())
+	}
 }
 
 func (m *Messenger) Print(msg string) {
-	m.Lock()
-	defer m.Unlock()
-
-	fmt.Fprint(m.Stdout, msg)
-}
-
-func Print(msg string) {
-	Default.Print(msg)
+	m.Puts(msg)
 }
 
 func (m *Messenger) HasErrored() bool {
@@ -156,10 +170,6 @@ func (m *Messenger) PromptUntil(opts []string) (string, error) {
 	}
 }
 
-func PromptUntil(opts []string) (string, error) {
-	return Default.PromptUntil(opts)
-}
-
 func (m *Messenger) PromptUntilYorN() bool {
 	res, err := m.PromptUntil([]string{"y", "yes", "n", "no"})
 	if err != nil {
@@ -171,8 +181,4 @@ func (m *Messenger) PromptUntilYorN() bool {
 	}
 
 	return false
-}
-
-func PromptUntilYorN() bool {
-	return Default.PromptUntilYorN()
 }
